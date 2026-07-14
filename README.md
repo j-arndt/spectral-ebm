@@ -46,7 +46,8 @@ Projected bounds are exposed as an explicit approximation and are not claimed to
 Python 3.10+ and PyTorch 2.1+ are supported. From a checkout:
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m pip install -e .
+python -m pip install -r requirements-dev.txt
 python -m pytest
 ruff check .
 ```
