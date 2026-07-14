@@ -34,6 +34,10 @@ class PersistentLangevin:
         device: torch.device | str | None = None,
         dtype: torch.dtype | None = None,
     ) -> Tensor:
+        parameter = next(model.parameters(), None)
+        if parameter is not None:
+            device = parameter.device if device is None else device
+            dtype = parameter.dtype if dtype is None else dtype
         if self.state is None or self.state.shape != shape:
             self.state = torch.empty(shape, device=device, dtype=dtype).uniform_(-1.0, 1.0)
         else:
