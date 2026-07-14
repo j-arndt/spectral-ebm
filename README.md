@@ -9,12 +9,12 @@ This repository is a reproducible proof of concept. It measures the parameter an
 The first implementation provides:
 
 - a real-valued `CirculantLinear` layer with a documented first-column convention;
-- a matched `SpectralEBM` and `DenseEBM` scalar-energy baseline;
+- matched `SpectralEBM`, `DenseEBM`, and `DiagonalEBM` scalar-energy baselines;
 - mathematically specified Unadjusted Langevin Algorithm (ULA) steps;
 - short-run contrastive-divergence and denoising-score-matching losses;
-- reference-matrix, gradient, sampler, and parameter-count tests.
+- persistent chains plus reference-matrix, gradient, sampler, serialization, and parameter-count tests.
 
-The project is under active development. Toy-data experiments, raw benchmark artifacts, and the public release checklist are tracked in [PLAN.md](PLAN.md).
+The local POC milestone is implemented and tested. The remaining public-release gate is external publication and repository metadata. The plan is tracked in [PLAN.md](PLAN.md), with proof details in [docs/proof.md](docs/proof.md), training conventions in [docs/training.md](docs/training.md), and novelty boundaries in [docs/novelty.md](docs/novelty.md).
 
 ## Mathematical convention
 
@@ -71,6 +71,15 @@ samples = langevin_sample(model, initial, steps=10, step_size=0.01)
 print(samples.shape)
 ```
 
+## Reproduce experiments
+
+Run the full benchmark harness from the repository root:
+
+```powershell
+python -m benchmarks.full_benchmark --device cuda --dims 128 256 512 1024 2048 --batch-size 64 --repeats 20 --output benchmark_results/full-cuda.json
+```
+
+The committed artifacts in [benchmark_results](benchmark_results) include CPU/CUDA timing, parameter counts, large-dimension measurements, Gaussian score matching, a four-mode Gaussian mixture, and a noisy-ring experiment. The benchmark protocol is documented in [docs/benchmark_protocol.md](docs/benchmark_protocol.md). Results are hardware-specific and include mixed outcomes; they are not universal speed claims.
 ## Claims and prior art
 
 FFT/circulant projections and their asymptotic parameter and arithmetic reductions are established prior art, including [Cheng et al. (ICCV 2015)](https://openaccess.thecvf.com/content_iccv_2015/html/Cheng_An_Exploration_of_ICCV_2015_paper.html) and [CirCNN](https://arxiv.org/abs/1708.08917). EBM training with Langevin sampling is also established. The repository therefore does not describe the basic combination as a new invention. Any future research contribution must be stated narrowly, compared against the closest references, and supported by a theorem or reproducible evidence.

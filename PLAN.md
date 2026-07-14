@@ -1,6 +1,6 @@
 # Spectral EBM: Correctness-First Proof-of-Concept Plan
 
-Status: initial plan for a clean-room repository. The remote repository currently has no commits.
+Status: local POC milestone implemented and verified; external publication, final metadata, and release audit remain pending.
 
 ## Final goal
 
