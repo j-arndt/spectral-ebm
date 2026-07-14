@@ -1,6 +1,15 @@
 # Spectral EBM: Correctness-First Proof-of-Concept Plan
 
-Status: local POC milestone implemented and verified; external publication, final metadata, and release audit remain pending.
+Status: public v0.1.3 release published and verified; longer-term research and documentation improvements remain on the roadmap.
+
+## Release audit (2026-07-14)
+
+- Public repository: https://github.com/j-arndt/spectral-ebm
+- Current main commit: `8af886d`
+- Current release: `v0.1.3` with a GitHub Release and Apache-2.0 license
+- Local verification: 14 tests passed, Ruff passed, and a wheel was built successfully
+- Remote verification: GitHub Actions passed on Python 3.10 and 3.12
+- Public presentation: README hero plots, result tables, raw JSON artifacts, About description, homepage, and discovery topics
 
 ## Final goal
 
