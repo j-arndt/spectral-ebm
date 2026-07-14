@@ -4,13 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectral-ebm"
-version = "0.1.1"
+version = "0.1.2"
 description = "Correctness-first FFT-parameterized energy-based models."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "spectral-ebm contributors" }]
 dependencies = ["torch>=2.1"]
+
+[project.urls]
+Homepage = "https://github.com/j-arndt/spectral-ebm"
+Repository = "https://github.com/j-arndt/spectral-ebm"
+Documentation = "https://github.com/j-arndt/spectral-ebm#readme"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
