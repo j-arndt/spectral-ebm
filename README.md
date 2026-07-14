@@ -149,7 +149,7 @@ Circulant and FFT-structured projections are established prior art, as are EBMs 
 
 ## Releases, license, and citation
 
-The current public release is [v0.1.2](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.1.2). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
+The current public release is [v0.1.3](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.1.3). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
 
 ```bibtex
 @software{arndt_spectral_ebm_2026,
@@ -163,4 +163,4 @@ The current public release is [v0.1.2](https://github.com/j-arndt/spectral-ebm/r
 
 ## Status
 
-`v0.1.2` is a polished proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.
+`v0.1.3` is a polished proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.
