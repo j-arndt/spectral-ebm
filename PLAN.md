@@ -1,6 +1,6 @@
 # Spectral EBM: Correctness-First Proof-of-Concept Plan
 
-Status: v0.2.0 architectural extension implemented locally; publication and remote release verification remain pending.
+Status: public v0.2.0 architectural extension published and verified; longer-term research and documentation improvements remain on the roadmap.
 
 ## Release audit (2026-07-14)
 
