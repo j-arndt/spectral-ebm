@@ -1,0 +1,42 @@
+{
+  "config": {
+    "steps": 300,
+    "batch_size": 256,
+    "mixture_std": 0.25,
+    "noise_std": 0.1,
+    "lr": 0.002,
+    "sample_count": 1024,
+    "sample_steps": 100,
+    "sample_step_size": 0.01,
+    "seed": 0,
+    "output": "benchmark_results\\2026-07-14-mixture-dsm.json"
+  },
+  "models": {
+    "spectral": {
+      "score_mse": 10.519200325012207,
+      "mode_counts": [
+        189,
+        212,
+        217,
+        406
+      ],
+      "sample_mean": [
+        0.08324769139289856,
+        0.10485086590051651
+      ]
+    },
+    "dense": {
+      "score_mse": 13.776834487915039,
+      "mode_counts": [
+        259,
+        271,
+        302,
+        192
+      ],
+      "sample_mean": [
+        -0.05390854924917221,
+        -0.19874219596385956
+      ]
+    }
+  }
+}
