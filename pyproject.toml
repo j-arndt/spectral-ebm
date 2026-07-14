@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectral-ebm"
-version = "0.2.0"
+version = "0.3.0"
 description = "Correctness-first FFT-parameterized energy-based models."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,7 @@ Documentation = "https://github.com/j-arndt/spectral-ebm#readme"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "matplotlib>=3.10"]
+triton = ["triton>=3.0"]
 
 [tool.setuptools.packages.find]
 include = ["spectral_ebm*"]

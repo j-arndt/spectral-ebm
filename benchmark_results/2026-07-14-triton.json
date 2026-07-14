@@ -1,0 +1,18 @@
+{
+  "config": {
+    "channels": 4,
+    "dim": 256,
+    "batch_size": 64,
+    "repeats": 20,
+    "output": "benchmark_results\\2026-07-14-triton.json"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "torch": "2.6.0+cu124",
+    "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU"
+  },
+  "triton_available": true,
+  "triton_runtime_available": false,
+  "status": "unavailable",
+  "reason": "CUDA/Triton runtime or a visible C compiler is unavailable; no Triton timing claim was recorded."
+}

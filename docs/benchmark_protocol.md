@@ -28,3 +28,13 @@ python -m benchmarks.benchmark_extensions --device cpu --dims 64 128 --channels 
 
 - `BlockCirculantLinear` is compared with a dense flattened channel map at matched input/output shape. The comparison reports parameters and forward latency separately; no universal speed claim follows.
 - `vectorized_langevin_chain()` is compared with repeated `langevin_sample()` calls at the same model, steps, step size, temperature, and zero-noise deterministic setting. The comparison is a memory/allocation optimization smoke test, not evidence of different Markov-chain behavior.
+## Accelerator and formal-search smoke paths
+
+The Triton path is benchmarkable only when `triton_runtime_available()` is true. The repository includes a CUDA correctness test for forward and parameter/input gradients; it is skipped with an explicit prerequisite message when the host lacks a C compiler or compatible Triton runtime. The current Windows development host has CUDA and Triton installed but no compiler visible to Triton, so it does not publish a Triton timing claim.
+
+The parser-agnostic formal-search smoke path is not a performance benchmark. Run `python scripts/formal_search_demo.py --dim 64 --steps 4` to verify token normalization, HRR encoding, persistent-chain refinement, and structured energy output.
+The Triton probe also records capability without fabricating a timing result:
+
+```powershell
+python -m benchmarks.benchmark_triton --output benchmark_results/local-triton.json
+```

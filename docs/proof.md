@@ -98,3 +98,6 @@ This extension adds channel mixing but does not remove the cyclic structure insi
 ## Persistent Langevin execution
 
 `vectorized_langevin_chain()` reuses one detached state buffer and performs the drift/noise/bound update under `no_grad` after extracting the current input gradient. It is an allocation optimization, not graph pre-caching and not a different sampler. With a fixed `noise_sequence`, tests verify exact agreement with repeated `ula_step()` calls. The unavoidable input-gradient autograd work is still performed at every step.
+## Triton backend boundary
+
+`BlockCirculantLinear(backend="triton")` keeps the real FFT transforms explicit and delegates the frequency-bin channel contraction to an optional Triton kernel. The kernel consumes real/imaginary views of the complex spectra, accumulates the channel contraction in registers, and writes only the output spectrum. The torch backward path is used for autograd correctness. This is a fused frequency-mixing kernel, not a replacement for cuFFT; performance must be measured on the deployment GPU and compiler stack.

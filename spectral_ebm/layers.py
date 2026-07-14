@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import torch
 from torch import Tensor, nn
 
@@ -105,6 +107,8 @@ class BlockCirculantLinear(nn.Module):
         dim: int,
         *,
         bias: bool = True,
+        backend: Literal["torch", "triton"] = "torch",
+
     ) -> None:
         super().__init__()
         if in_channels < 1 or out_channels < 1 or dim < 1:
@@ -112,6 +116,9 @@ class BlockCirculantLinear(nn.Module):
         self.in_channels = int(in_channels)
         self.out_channels = int(out_channels)
         self.dim = int(dim)
+        if backend not in ("torch", "triton"):
+            raise ValueError("backend must be torch or triton")
+        self.backend = backend
         self.weight = nn.Parameter(torch.empty(self.out_channels, self.in_channels, self.dim))
         if bias:
             self.bias = nn.Parameter(torch.zeros(self.out_channels, self.dim))
@@ -135,7 +142,11 @@ class BlockCirculantLinear(nn.Module):
             )
         x_fft = torch.fft.rfft(x, dim=-1)
         weight_fft = torch.fft.rfft(self.weight, dim=-1)
-        output_fft = torch.einsum("...if,oif->...of", x_fft, weight_fft)
+        if self.backend == "triton":
+            from .triton_backend import block_circulant_frequency_mix
+            output_fft = block_circulant_frequency_mix(x_fft, weight_fft)
+        else:
+            output_fft = torch.einsum("...if,oif->...of", x_fft, weight_fft)
         output = torch.fft.irfft(output_fft, n=self.dim, dim=-1)
         return output if self.bias is None else output + self.bias
 
@@ -153,5 +164,5 @@ class BlockCirculantLinear(nn.Module):
     def extra_repr(self) -> str:
         return (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
-            f"dim={self.dim}, bias={self.bias is not None}"
+            f"dim={self.dim}, bias={self.bias is not None}, backend={self.backend}"
         )

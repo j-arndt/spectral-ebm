@@ -82,6 +82,7 @@ Raw measurements and the exact command are in [`benchmark_results/2026-07-14-ext
 | Reproduce timings | [Benchmark protocol](docs/benchmark_protocol.md) |
 | Reproduce toy experiments | [`scripts/`](scripts) and [`benchmark_results/`](benchmark_results) |
 | Evaluate novelty claims | [Prior art and novelty boundary](docs/novelty.md) |
+| Formal-state integration | [HRR proof-search adapter](docs/formal_search.md) |
 | Contribute | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## Install
@@ -150,6 +151,59 @@ python scripts/make_plots.py
 
 The committed artifacts include CPU and CUDA timings, large-dimension measurements, parameter counts, score-matching results, and every timing repetition. Results are hardware-specific. The current data supports a strong parameter-efficiency claim, not a universal speed claim.
 
+## Enterprise integration interfaces
+
+### Optional Triton backend
+
+`BlockCirculantLinear(..., backend="triton")` fuses the complex frequency-bin channel contraction in Triton while leaving the explicit `torch.fft.rfft`/`irfft` transforms on cuFFT. This removes the intermediate broadcast/einsum tensor; it does **not** claim that cuFFT’s internal FFT stages are fused or that every GPU receives a 2× speedup.
+
+```powershell
+python -m pip install -e .[triton]
+```
+
+Use `backend="torch"` for the portable default. Triton requires CUDA, a compatible Triton build, and a working C/CUDA compiler toolchain; the test suite skips the accelerator test when those prerequisites are absent.
+
+The committed [`2026-07-14-triton.json`](benchmark_results/2026-07-14-triton.json) records this machine capability probe and intentionally contains no fabricated speedup number.
+
+### Differentiable permutations
+
+`DifferentiablePermutation` learns a doubly-stochastic Sinkhorn matrix and supports straight-through hard assignments. `PermutedSpectralEBM(permutation_mode="differentiable")` inserts these layers between spectral blocks, so the coordinate shuffle receives gradients and is serialized with the model.
+
+```python
+from spectral_ebm import PermutedSpectralEBM
+
+model = PermutedSpectralEBM(
+    dim=128,
+    hidden_layers=3,
+    permutation_mode="differentiable",
+    permutation_hard=False,
+)
+```
+
+### Formal-state search adapter
+
+`HRREncoder` binds token vectors to positional role vectors with circular convolution, bundles them into continuous state vectors, and `FormalProofSearchAdapter` refines those vectors with the persistent Langevin chain.
+
+```python
+from spectral_ebm import FormalProofSearchAdapter, HRREncoder, SpectralEBM
+
+encoder = HRREncoder(["by", "intro", "exact", "h"], dim=128)
+adapter = FormalProofSearchAdapter(encoder, SpectralEBM(128))
+result = adapter.refine(
+    [["by", "intro", "h"], ["exact", "h"]],
+    steps=8,
+    step_size=0.01,
+    noise_scale=0.0,
+)
+```
+
+This is an integration interface for Lean 4 tactic tokens or parser-produced AST nodes. It does not include a Lean parser, tactic decoder, proof checker, or verified theorem result; a production deployment must connect those trusted components around the continuous candidate loop.
+
+Run the end-to-end smoke adapter with:
+
+```powershell
+python scripts/formal_search_demo.py --dim 64 --steps 4
+```
 ## Repository map
 
 ```text
@@ -157,7 +211,7 @@ spectral_ebm/       Core layers, models, chains, samplers, and training losses
 benchmarks/         Timing harnesses with synchronized CUDA measurements
 scripts/            Toy experiments and reproducible figure generation
 tests/              Algebra, gradients, sampling, serialization, and training tests
-docs/               Proof, training, benchmark, and novelty documentation
+docs/               Proof, training, benchmark, formal-search, and novelty documentation
 benchmark_results/  Raw JSON artifacts used for the published result plots
 ```
 
@@ -167,7 +221,7 @@ Circulant and FFT-structured projections are established prior art, as are EBMs 
 
 ## Releases, license, and citation
 
-The current public release is [v0.2.0](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.2.0). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
+The current public release is [v0.3.0](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.3.0). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
 
 ```bibtex
 @software{arndt_spectral_ebm_2026,
@@ -181,4 +235,4 @@ The current public release is [v0.2.0](https://github.com/j-arndt/spectral-ebm/r
 
 ## Status
 
-`v0.2.0` is a polished proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.
+`v0.3.0` is a polished enterprise-integration proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.

@@ -14,6 +14,7 @@ These JSON files are the source of truth for the figures and tables in the repos
 | [`2026-07-14-mixture-dsm.json`](2026-07-14-mixture-dsm.json) | Four-mode Gaussian mixture score matching and mode counts |
 | [`2026-07-14-ring-score.json`](2026-07-14-ring-score.json) | Noisy-ring score matching and sampled-radius summary |
 | [`2026-07-14-extensions-cpu.json`](2026-07-14-extensions-cpu.json) | Block-circulant versus dense channel-map timing and persistent-chain smoke measurements |
+| [`2026-07-14-triton.json`](2026-07-14-triton.json) | Triton capability probe; records unavailable status when toolchain prerequisites are missing |
 
 The published plots are generated with [`scripts/make_plots.py`](../scripts/make_plots.py):
 

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import torch
 from torch import Tensor, nn
 
 from .layers import BlockCirculantLinear, CirculantLinear
+from .permutations import DifferentiablePermutation
 
 
 def _activation() -> nn.Module:
     return nn.SiLU()
+
 
 def _noncyclic_permutation(dim: int, seed: int) -> Tensor:
     generator = torch.Generator(device="cpu")
@@ -76,6 +80,7 @@ class BlockSpectralEBM(nn.Module):
         *,
         hidden_channels: int | None = None,
         bias: bool = True,
+        backend: Literal["torch", "triton"] = "torch",
     ) -> None:
         super().__init__()
         if channels < 1 or dim < 1:
@@ -96,6 +101,7 @@ class BlockSpectralEBM(nn.Module):
                     channel_sizes[index + 1],
                     dim,
                     bias=bias,
+                    backend=backend,
                 )
                 for index in range(hidden_layers)
             ]
@@ -118,13 +124,14 @@ class BlockSpectralEBM(nn.Module):
 
 
 class PermutedSpectralEBM(nn.Module):
-    """Spectral EBM with fixed reproducible coordinate permutations.
+    """Spectral EBM with fixed or differentiable coordinate permutations.
 
-    A plain stack of circulant maps is cyclic-shift equivariant before its
-    scalar projection. Fixed non-cyclic permutations between hidden layers
-    intentionally break that shared coordinate symmetry while adding no
-    trainable parameters. Permutations are registered buffers, move with the
-    model across devices, and are serialized in the state dict.
+    ``permutation_mode="fixed"`` uses deterministic non-cyclic buffers and
+    adds no trainable parameters. ``permutation_mode="differentiable"`` uses
+    Sinkhorn-normalized learnable matrices, optionally with straight-through
+    hard assignments. Both modes break the shared coordinate symmetry between
+    spectral layers; only the fixed mode is exactly reproducible without a
+    training seed.
     """
 
     def __init__(
@@ -134,33 +141,58 @@ class PermutedSpectralEBM(nn.Module):
         *,
         bias: bool = True,
         seed: int = 42,
+        permutation_mode: Literal["fixed", "differentiable"] = "fixed",
+        permutation_temperature: float = 0.5,
+        permutation_hard: bool = False,
+        permutation_noise_scale: float = 0.0,
+        permutation_sinkhorn_iterations: int = 20,
     ) -> None:
         super().__init__()
         if dim < 1:
             raise ValueError("dim must be positive")
         if hidden_layers < 1:
             raise ValueError("hidden_layers must be positive")
-        if hidden_layers > 1 and dim < 3:
-            raise ValueError("dim must be at least 3 when interleaving permutations")
+        if permutation_mode not in ("fixed", "differentiable"):
+            raise ValueError("permutation_mode must be fixed or differentiable")
+        if permutation_mode == "fixed" and hidden_layers > 1 and dim < 3:
+            raise ValueError("dim must be at least 3 for non-cyclic fixed permutations")
         self.dim = int(dim)
         self.hidden_layers = int(hidden_layers)
         self.seed = int(seed)
+        self.permutation_mode = permutation_mode
         self.layers = nn.ModuleList(
             [CirculantLinear(dim, bias=bias) for _ in range(hidden_layers)]
         )
         self._permutation_names: list[str] = []
+        self.permutation_layers = nn.ModuleList()
         for index in range(hidden_layers - 1):
-            permutation = _noncyclic_permutation(dim, self.seed + index)
-            name = f"permutation_{index}"
-            self.register_buffer(name, permutation, persistent=True)
-            self._permutation_names.append(name)
+            if permutation_mode == "fixed":
+                name = f"permutation_{index}"
+                self.register_buffer(
+                    name,
+                    _noncyclic_permutation(dim, self.seed + index),
+                    persistent=True,
+                )
+                self._permutation_names.append(name)
+            else:
+                self.permutation_layers.append(
+                    DifferentiablePermutation(
+                        dim,
+                        temperature=permutation_temperature,
+                        sinkhorn_iterations=permutation_sinkhorn_iterations,
+                        hard=permutation_hard,
+                        noise_scale=permutation_noise_scale,
+                    )
+                )
         self.activation = _activation()
         self.energy_projection = nn.Linear(dim, 1, bias=False)
 
     @property
     def permutations(self) -> tuple[Tensor, ...]:
-        """Return the fixed coordinate permutations in layer order."""
+        """Return current fixed buffers or differentiable matrices."""
 
+        if self.permutation_mode == "differentiable":
+            return tuple(layer.permutation_matrix() for layer in self.permutation_layers)
         return tuple(getattr(self, name) for name in self._permutation_names)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -171,7 +203,10 @@ class PermutedSpectralEBM(nn.Module):
             hidden = layer(hidden)
             if index + 1 < len(self.layers):
                 hidden = self.activation(hidden)
-                hidden = hidden.index_select(-1, self.permutations[index])
+                if self.permutation_mode == "differentiable":
+                    hidden = self.permutation_layers[index](hidden)
+                else:
+                    hidden = hidden.index_select(-1, self.permutations[index])
         return self.energy_projection(hidden).squeeze(-1)
 
 

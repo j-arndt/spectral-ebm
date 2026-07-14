@@ -51,3 +51,29 @@ def test_permutations_are_not_cyclic_shifts() -> None:
     identity = torch.arange(13)
     for permutation in model.permutations:
         assert all(not torch.equal(permutation, torch.roll(identity, shift)) for shift in range(13))
+
+def test_differentiable_permuted_model_has_doubly_stochastic_gradients() -> None:
+    model = PermutedSpectralEBM(
+        7,
+        hidden_layers=3,
+        permutation_mode="differentiable",
+        permutation_temperature=0.7,
+    )
+    x = torch.randn(4, 7)
+    energy = model(x).sum()
+    energy.backward()
+    assert len(model.permutations) == 2
+    for permutation, layer in zip(model.permutations, model.permutation_layers):
+        torch.testing.assert_close(permutation.sum(dim=-1), torch.ones(7), atol=1e-4, rtol=1e-4)
+        torch.testing.assert_close(permutation.sum(dim=-2), torch.ones(7), atol=1e-4, rtol=1e-4)
+        assert layer.logits.grad is not None
+        assert torch.isfinite(layer.logits.grad).all()
+
+
+def test_differentiable_hard_row_assignment_keeps_gradient_path() -> None:
+    model = PermutedSpectralEBM(5, hidden_layers=2, permutation_mode="differentiable", permutation_hard=True)
+    model(torch.randn(3, 5)).sum().backward()
+    matrix = model.permutations[0]
+    assert torch.all((matrix == 0) | (matrix == 1))
+    assert torch.all(matrix.sum(dim=-1) == 1)
+    assert model.permutation_layers[0].logits.grad is not None
