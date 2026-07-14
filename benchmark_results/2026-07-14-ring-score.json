@@ -1,0 +1,25 @@
+{
+  "config": {
+    "steps": 300,
+    "batch_size": 256,
+    "radius": 1.0,
+    "radial_std": 0.15,
+    "lr": 0.002,
+    "sample_count": 1024,
+    "sample_steps": 100,
+    "seed": 0,
+    "output": "benchmark_results\\2026-07-14-ring-score.json"
+  },
+  "models": {
+    "spectral": {
+      "score_mse": 19.785106658935547,
+      "sample_radius_mean": 1.5286608934402466,
+      "sample_radius_std": 0.7890167236328125
+    },
+    "dense": {
+      "score_mse": 19.2392635345459,
+      "sample_radius_mean": 1.6201893091201782,
+      "sample_radius_std": 0.8082548379898071
+    }
+  }
+}
