@@ -13,6 +13,7 @@ These JSON files are the source of truth for the figures and tables in the repos
 | [`2026-07-14-gaussian-dsm.json`](2026-07-14-gaussian-dsm.json) | Standard Gaussian denoising score matching |
 | [`2026-07-14-mixture-dsm.json`](2026-07-14-mixture-dsm.json) | Four-mode Gaussian mixture score matching and mode counts |
 | [`2026-07-14-ring-score.json`](2026-07-14-ring-score.json) | Noisy-ring score matching and sampled-radius summary |
+| [`2026-07-14-extensions-cpu.json`](2026-07-14-extensions-cpu.json) | Block-circulant versus dense channel-map timing and persistent-chain smoke measurements |
 
 The published plots are generated with [`scripts/make_plots.py`](../scripts/make_plots.py):
 
@@ -36,3 +37,4 @@ python -m benchmarks.full_benchmark --device cuda --dims 1024 2048 --batch-size 
 ```
 
 The benchmark measures a synchronized ULA step including the input-energy gradient. It does not measure a full training epoch, distributed throughput, or formal proof search. See [`docs/benchmark_protocol.md`](../docs/benchmark_protocol.md) for the complete methodology and limitations.
+The extension visualization is [`extensions.png`](../docs/assets/extensions.png).

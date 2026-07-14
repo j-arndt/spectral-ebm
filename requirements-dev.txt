@@ -1,4 +1,4 @@
-# Exact development tools used for the v0.1.3 verification run.
+# Exact development tools used for the v0.2.0 verification run.
 pytest==8.3.5
 pytest-cov==7.0.0
 ruff==0.15.0

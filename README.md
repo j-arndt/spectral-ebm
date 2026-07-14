@@ -54,6 +54,24 @@ The included score-matching smoke tests are intentionally small and diagnostic, 
 
 All values above are read directly from the committed JSON artifacts in [`benchmark_results/`](benchmark_results). See the [benchmark protocol](docs/benchmark_protocol.md) for device, batch size, repetitions, and timing conventions.
 
+## Production-grade extensions
+
+The release now includes three structured extensions derived from the architectural audit:
+
+- **`BlockCirculantLinear` / `BlockSpectralEBM`**: dense channel mixing with a circulant FFT block for every input/output channel pair. The implementation exposes a slow dense reference matrix and an exact Fourier-symbol operator norm.
+- **`PermutedSpectralEBM`**: deterministic, serialized coordinate permutations between spectral layers. The fixed shuffles add no trainable parameters and intentionally break the shared cyclic coordinate symmetry; they are an expressivity heuristic, not a universal theorem.
+- **`vectorized_langevin_chain`**: persistent-state ULA execution that reuses a detached state buffer. Fixed-noise tests prove step-for-step agreement with repeated `ula_step` calls; it is an allocation optimization, not graph caching or a new sampler.
+
+The extension benchmark is intentionally modest and descriptive:
+
+| D | Dense channel-map parameters | Block-circulant parameters | Reduction |
+|---:|---:|---:|---:|
+| 32 | 16,512 | 640 | 25.8× |
+| 64 | 65,792 | 1,280 | **51.4×** |
+
+<img src="docs/assets/extensions.png" alt="Block-circulant parameter budget and persistent Langevin CPU smoke benchmark" width="900">
+
+Raw measurements and the exact command are in [`benchmark_results/2026-07-14-extensions-cpu.json`](benchmark_results/2026-07-14-extensions-cpu.json) and [the benchmark protocol](docs/benchmark_protocol.md).
 ## Start here
 
 | Goal | Path |
@@ -149,7 +167,7 @@ Circulant and FFT-structured projections are established prior art, as are EBMs 
 
 ## Releases, license, and citation
 
-The current public release is [v0.1.3](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.1.3). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
+The current public release is [v0.2.0](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.2.0). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
 
 ```bibtex
 @software{arndt_spectral_ebm_2026,
@@ -163,4 +181,4 @@ The current public release is [v0.1.3](https://github.com/j-arndt/spectral-ebm/r
 
 ## Status
 
-`v0.1.3` is a polished proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.
+`v0.2.0` is a polished proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.

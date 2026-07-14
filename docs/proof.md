@@ -66,3 +66,35 @@ x_next = x + h/2 grad log p(x) + sqrt(h) epsilon
 ```
 
 The implementation exposes a separate deterministic `relax()` mode by setting the noise scale to zero. Short chains are approximations; they are not asserted to be equilibrated samples.
+
+## Multi-channel block-circulant extension
+
+Let `x` have shape `(..., C_in, D)` and let `c[o, i, :]` be one generator for each output/input channel pair. The block-circulant layer computes
+
+```text
+y[o] = sum_i circ(c[o, i]) x[i] + b[o]
+```
+
+where every block follows the same convention `W[i, j] = c[(i - j) mod D]`. In the Fourier domain, for each frequency `k`, this becomes a dense channel mixing matrix:
+
+```text
+ŷ[o, k] = sum_i ĉ[o, i, k] x̂[i, k].
+```
+
+The layer therefore costs `O(C_out C_in D log D)` arithmetic and stores `C_out C_in D + C_out D` parameters with bias. Its exact operator norm is
+
+```text
+max_k ||Ĉ[k]||_2,
+```
+
+where `Ĉ[k]` is the `C_out × C_in` Fourier symbol at frequency `k`. `BlockCirculantLinear.materialize()` and `block_circulant_matrix()` provide a deliberately slow dense oracle for small dimensions.
+
+This extension adds channel mixing but does not remove the cyclic structure inside each feature-axis block. It is not equivalent to an unconstrained dense map.
+
+## Permutation interleaving
+
+`PermutedSpectralEBM` inserts fixed coordinate permutations between nonlinear spectral layers. If `S` is the cyclic shift operator and `P` is a fixed permutation, the interleaved map is generally not equivariant to `S` because `PS != SP`. The permutations are not learned: they are deterministic buffers generated from a local seed and serialized with the model. This is an architectural expressivity heuristic, not a theorem that the resulting nonlinear scalar energy is universally expressive.
+
+## Persistent Langevin execution
+
+`vectorized_langevin_chain()` reuses one detached state buffer and performs the drift/noise/bound update under `no_grad` after extracting the current input gradient. It is an allocation optimization, not graph pre-caching and not a different sampler. With a fixed `noise_sequence`, tests verify exact agreement with repeated `ula_step()` calls. The unavoidable input-gradient autograd work is still performed at every step.

@@ -129,6 +129,33 @@ def toy_scores(ax: plt.Axes) -> None:
     legend(ax)
 
 
+def extension_comparison(axes: tuple[plt.Axes, plt.Axes]) -> None:
+    data = load("2026-07-14-extensions-cpu.json")
+    layer_runs = data["block_layer_runs"]
+    dims = [run["dim"] for run in layer_runs]
+    block_params = [run["block_parameters"] for run in layer_runs]
+    dense_params = [run["dense_parameters"] for run in layer_runs]
+    axes[0].loglog(dims, dense_params, "o-", color=BLUE, linewidth=2.4, label="Dense channel map")
+    axes[0].loglog(dims, block_params, "o-", color=CYAN, linewidth=2.4, label="Block-circulant")
+    axes[0].set_xlabel("Feature dimension D")
+    axes[0].set_ylabel("Parameters")
+    axes[0].set_xticks(dims, [str(dim) for dim in dims])
+    style(axes[0], "Multi-channel parameter budget")
+    legend(axes[0])
+
+    chain_runs = data["chain_runs"]
+    chain_dims = [run["dim"] for run in chain_runs]
+    standard = [run["standard_chain"]["median_ms"] for run in chain_runs]
+    persistent = [run["persistent_state_chain"]["median_ms"] for run in chain_runs]
+    axes[1].plot(chain_dims, standard, "o-", color=ORANGE, linewidth=2.4, label="Repeated ULA")
+    axes[1].plot(chain_dims, persistent, "o-", color=PINK, linewidth=2.4, label="Persistent state")
+    axes[1].set_xlabel("Feature dimension D")
+    axes[1].set_ylabel("Median chain time (ms)")
+    axes[1].set_xticks(chain_dims, [str(dim) for dim in chain_dims])
+    axes[1].text(0.03, 0.08, "CPU smoke benchmark · 3 ULA steps", transform=axes[1].transAxes, color=MUTED, fontsize=9)
+    style(axes[1], "Persistent execution is an optimization, not a new sampler")
+    legend(axes[1])
+
 def save(fig: plt.Figure, name: str, dpi: int = 180) -> None:
     fig.savefig(ASSETS / name, dpi=dpi, facecolor=NAVY, bbox_inches="tight", pad_inches=0.18)
     plt.close(fig)
@@ -162,6 +189,11 @@ def main() -> None:
     toy_scores(ax)
     fig.tight_layout()
     save(fig, "toy-results.png")
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5), facecolor=NAVY)
+    extension_comparison(axes)
+    fig.tight_layout(w_pad=2.0)
+    save(fig, "extensions.png")
 
 
 if __name__ == "__main__":

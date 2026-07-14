@@ -17,3 +17,14 @@ python -m benchmarks.full_benchmark --device cuda --dims 128 256 512 --batch-siz
 ```
 
 The benchmark is descriptive. A theoretical `O(D log D)` layer can still lose in wall-clock latency to a dense GEMM at small or moderate dimensions because FFT launch and memory overhead dominate. Results must therefore be reported per hardware configuration.
+
+## Extension benchmark
+
+The extension harness measures two separate claims:
+
+```powershell
+python -m benchmarks.benchmark_extensions --device cpu --dims 64 128 --channels 4 --batch-size 16 --chain-steps 5 --repeats 10 --output benchmark_results/extensions.json
+```
+
+- `BlockCirculantLinear` is compared with a dense flattened channel map at matched input/output shape. The comparison reports parameters and forward latency separately; no universal speed claim follows.
+- `vectorized_langevin_chain()` is compared with repeated `langevin_sample()` calls at the same model, steps, step size, temperature, and zero-noise deterministic setting. The comparison is a memory/allocation optimization smoke test, not evidence of different Markov-chain behavior.

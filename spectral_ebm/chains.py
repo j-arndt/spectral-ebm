@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor, nn
 
-from .sampler import langevin_sample
+from .sampler import vectorized_langevin_chain
 
 
 class PersistentLangevin:
@@ -45,7 +45,7 @@ class PersistentLangevin:
                 self.state = self.state.to(device=device)
             if dtype is not None:
                 self.state = self.state.to(dtype=dtype)
-        self.state = langevin_sample(
+        self.state = vectorized_langevin_chain(
             model,
             self.state,
             steps=steps,
