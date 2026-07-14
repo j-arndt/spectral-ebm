@@ -30,11 +30,17 @@ python -m benchmarks.benchmark_extensions --device cpu --dims 64 128 --channels 
 - `vectorized_langevin_chain()` is compared with repeated `langevin_sample()` calls at the same model, steps, step size, temperature, and zero-noise deterministic setting. The comparison is a memory/allocation optimization smoke test, not evidence of different Markov-chain behavior.
 ## Accelerator and formal-search smoke paths
 
-The Triton path is benchmarkable only when `triton_runtime_available()` is true. The repository includes a CUDA correctness test for forward and parameter/input gradients; it is skipped with an explicit prerequisite message when the host lacks a C compiler or compatible Triton runtime. The current Windows development host has CUDA and Triton installed but no compiler visible to Triton, so it does not publish a Triton timing claim.
+The Triton path is benchmarkable only when triton_runtime_available() is true. The repository includes a CUDA correctness test for forward and parameter/input gradients; it skips with an explicit prerequisite message when the host lacks a C compiler or compatible Triton runtime. The capability probe records unavailable environments, while the RTX 4060 Laptop GPU artifact records an actual measured comparison after the local compiler path was configured. No universal speedup is inferred.
 
 The parser-agnostic formal-search smoke path is not a performance benchmark. Run `python scripts/formal_search_demo.py --dim 64 --steps 4` to verify token normalization, HRR encoding, persistent-chain refinement, and structured energy output.
 The Triton probe also records capability without fabricating a timing result:
 
 ```powershell
 python -m benchmarks.benchmark_triton --output benchmark_results/local-triton.json
-```
+```## Production-hardening audit
+
+The v0.4.0 audit compares the quadratic parameter memory of a Sinkhorn relaxation with the linear K*D storage of the Householder mixer and runs projected spherical Langevin steps through a block-spectral energy model:
+
+    python -m benchmarks.hardening_audit --device cuda --dim 4096 --batch-size 64 --channels 8 --output benchmark_results/hardening-cuda.json
+
+The default scale is intentionally hardware-dependent. The committed CPU smoke artifact uses dim 64, batch size 4, and two channels. It reports parameter bytes, CUDA peak allocation when available, and per-step sphere-norm envelopes. The spherical sampler is projected ULA with tangent-space drift/noise and radial retraction; it is not advertised as an exact geodesic or stationary sampler.

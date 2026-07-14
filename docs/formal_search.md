@@ -7,13 +7,13 @@ The formal-search adapter is a parser-agnostic bridge between discrete syntax st
 For token `t_i` at position `i`, the encoder stores a fixed token vector `v(t_i)` and fixed role vector `r_i`. Binding is circular convolution:
 
 ```text
-b_i = v(t_i) ⊛ r_i
+b_i = v(t_i) * r_i
 ```
 
 The state representation is a bundled superposition:
 
 ```text
-h(tokens) = normalize(1 / sqrt(n) · sum_i b_i)
+h(tokens) = normalize(1 / sqrt(n) * sum_i b_i)
 ```
 
 The vectors are generated from a local seed and registered as buffers. The encoder therefore has deterministic serialization and does not silently call an external language model.
@@ -44,3 +44,8 @@ encoder = HRREncoder(["app", "identifier", "Nat.succ", "n"], dim=64)
 adapter = FormalProofSearchAdapter(encoder, SpectralEBM(64, hidden_layers=2))
 result = adapter.refine([state], steps=4, step_size=0.01, noise_scale=0.0)
 ```
+## Spherical HRR refinement
+
+FormalProofSearchAdapter uses radius-one spherical projected ULA by default. The energy gradient and noise are projected to the tangent plane, then the updated embedding is retracted to unit norm. Pass spherical=False to select the Euclidean persistent-chain path.
+
+This preserves the HRR encoder's normalized representation surface but does not make continuous candidates into valid Lean syntax or proofs. The parser, decoder, tactic executor, and kernel checker remain outside the adapter trust boundary.

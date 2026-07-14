@@ -175,6 +175,8 @@ class FormalProofSearchAdapter(nn.Module):
         temperature: float = 1.0,
         bounds: tuple[float, float] | None = None,
         noise_scale: float = 0.0,
+        spherical: bool = True,
+        radius: float = 1.0,
     ) -> FormalSearchResult:
         """Run persistent Langevin refinement from HRR-encoded syntax states."""
 
@@ -189,6 +191,8 @@ class FormalProofSearchAdapter(nn.Module):
             temperature=temperature,
             bounds=bounds,
             noise_scale=noise_scale,
+            sampler="spherical" if spherical else "ula",
+            radius=radius,
         )
         refined_energy = self.energy_model(refined).detach()
         return FormalSearchResult(

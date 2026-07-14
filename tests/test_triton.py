@@ -25,3 +25,13 @@ def test_triton_block_circulant_matches_torch_forward_and_gradients() -> None:
         rtol=2e-3,
         atol=2e-3,
     )
+
+
+def test_tiled_config_uses_bounded_input_chunks() -> None:
+    from spectral_ebm.triton_backend import _tile_config
+
+    block_r, block_o, block_f, block_i = _tile_config(137, 256, 2049)
+    assert block_r == 1
+    assert block_o == 8
+    assert block_f == 32
+    assert block_i == 32

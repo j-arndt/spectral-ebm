@@ -8,7 +8,7 @@ import torch
 from torch import Tensor, nn
 
 from .layers import BlockCirculantLinear, CirculantLinear
-from .permutations import DifferentiablePermutation
+from .permutations import AmortizedHouseholderPermutation, DifferentiablePermutation
 
 
 def _activation() -> nn.Module:
@@ -141,19 +141,20 @@ class PermutedSpectralEBM(nn.Module):
         *,
         bias: bool = True,
         seed: int = 42,
-        permutation_mode: Literal["fixed", "differentiable"] = "fixed",
+        permutation_mode: Literal["fixed", "differentiable", "householder"] = "fixed",
         permutation_temperature: float = 0.5,
         permutation_hard: bool = False,
         permutation_noise_scale: float = 0.0,
         permutation_sinkhorn_iterations: int = 20,
+        householder_reflections: int = 4,
     ) -> None:
         super().__init__()
         if dim < 1:
             raise ValueError("dim must be positive")
         if hidden_layers < 1:
             raise ValueError("hidden_layers must be positive")
-        if permutation_mode not in ("fixed", "differentiable"):
-            raise ValueError("permutation_mode must be fixed or differentiable")
+        if permutation_mode not in ("fixed", "differentiable", "householder"):
+            raise ValueError("permutation_mode must be fixed, differentiable, or householder")
         if permutation_mode == "fixed" and hidden_layers > 1 and dim < 3:
             raise ValueError("dim must be at least 3 for non-cyclic fixed permutations")
         self.dim = int(dim)
@@ -174,7 +175,7 @@ class PermutedSpectralEBM(nn.Module):
                     persistent=True,
                 )
                 self._permutation_names.append(name)
-            else:
+            elif permutation_mode == "differentiable":
                 self.permutation_layers.append(
                     DifferentiablePermutation(
                         dim,
@@ -183,6 +184,10 @@ class PermutedSpectralEBM(nn.Module):
                         hard=permutation_hard,
                         noise_scale=permutation_noise_scale,
                     )
+                )
+            else:
+                self.permutation_layers.append(
+                    AmortizedHouseholderPermutation(dim, reflections=householder_reflections)
                 )
         self.activation = _activation()
         self.energy_projection = nn.Linear(dim, 1, bias=False)
@@ -193,6 +198,8 @@ class PermutedSpectralEBM(nn.Module):
 
         if self.permutation_mode == "differentiable":
             return tuple(layer.permutation_matrix() for layer in self.permutation_layers)
+        if self.permutation_mode == "householder":
+            return tuple(layer.matrix() for layer in self.permutation_layers)
         return tuple(getattr(self, name) for name in self._permutation_names)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -203,7 +210,7 @@ class PermutedSpectralEBM(nn.Module):
             hidden = layer(hidden)
             if index + 1 < len(self.layers):
                 hidden = self.activation(hidden)
-                if self.permutation_mode == "differentiable":
+                if self.permutation_mode in ("differentiable", "householder"):
                     hidden = self.permutation_layers[index](hidden)
                 else:
                     hidden = hidden.index_select(-1, self.permutations[index])

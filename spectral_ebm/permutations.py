@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import torch
 from torch import Tensor, nn
+from torch.nn import functional as F
 
 
 class DifferentiablePermutation(nn.Module):
@@ -77,3 +78,54 @@ class DifferentiablePermutation(nn.Module):
             f"dim={self.dim}, temperature={self.temperature}, "
             f"iterations={self.sinkhorn_iterations}, hard={self.hard}"
         )
+
+
+class AmortizedHouseholderPermutation(nn.Module):
+    """Compose K trainable Householder reflections with O(KD) parameters.
+
+    The result is an orthogonal coordinate transformation, preserving the
+    Euclidean norm up to floating-point error. It is a low-rank orthogonal
+    mixer rather than a strict one-hot coordinate permutation.
+    """
+
+    def __init__(self, dim: int, reflections: int = 4, *, eps: float = 1e-8) -> None:
+        super().__init__()
+        if dim < 1:
+            raise ValueError("dim must be positive")
+        if reflections < 0:
+            raise ValueError("reflections must be non-negative")
+        if eps <= 0:
+            raise ValueError("eps must be positive")
+        self.dim = int(dim)
+        self.reflections = int(reflections)
+        self.eps = float(eps)
+        self.vectors = nn.Parameter(torch.empty(self.reflections, self.dim))
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        if self.reflections:
+            nn.init.normal_(self.vectors, mean=0.0, std=1.0)
+
+    def _unit_vectors(self) -> Tensor:
+        return F.normalize(self.vectors, dim=-1, eps=self.eps)
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.shape[-1] != self.dim:
+            raise ValueError(f"expected last dimension {self.dim}, got {x.shape[-1]}")
+        output = x
+        for vector in self._unit_vectors():
+            projection = torch.matmul(output, vector)
+            output = output - 2.0 * projection.unsqueeze(-1) * vector
+        return output
+
+    def matrix(self) -> Tensor:
+        """Materialize the dense orthogonal operator for small diagnostics only."""
+
+        operator = torch.eye(self.dim, device=self.vectors.device, dtype=self.vectors.dtype)
+        for vector in self._unit_vectors():
+            reflector = torch.eye(self.dim, device=operator.device, dtype=operator.dtype) - 2.0 * torch.outer(vector, vector)
+            operator = operator @ reflector
+        return operator
+
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}, reflections={self.reflections}, parameters={self.reflections * self.dim}"

@@ -48,7 +48,7 @@ def ula_step(
     bounds: tuple[float, float] | None = None,
     noise_scale: float = 1.0,
 ) -> Tensor:
-    """Perform one ULA step for ``p(x) ∝ exp(-E(x) / temperature)``.
+    """Perform one ULA step for a density proportional to exp(-E(x) / temperature).
 
     With time step ``h`` and standard normal ``epsilon``, the update is
     ``x' = x - h/(2T) * grad(E(x)) + sqrt(h) * epsilon``. ``bounds`` applies
@@ -174,3 +174,110 @@ def relax(
         bounds=bounds,
         noise_scale=0.0,
     )
+
+def _validate_radius(radius: float) -> None:
+    if radius <= 0:
+        raise ValueError("radius must be positive")
+
+
+def _project_to_sphere(x: Tensor, radius: float) -> Tensor:
+    _validate_radius(radius)
+    if x.ndim < 1 or x.shape[-1] < 1:
+        raise ValueError("spherical states must have a non-empty final dimension")
+    norms = torch.linalg.vector_norm(x, dim=-1, keepdim=True)
+    if torch.any(norms <= torch.finfo(x.dtype).eps).item():
+        raise ValueError("spherical states must have non-zero final-dimension norms")
+    return (radius * x / norms).detach()
+
+
+def explicit_spherical_langevin_step(
+    model: nn.Module,
+    x: Tensor,
+    *,
+    step_size: float,
+    temperature: float = 1.0,
+    noise: Tensor | None = None,
+    noise_scale: float = 1.0,
+    radius: float = 1.0,
+) -> Tensor:
+    """Take a tangent-projected Langevin step and retract to a sphere.
+
+    The Euclidean energy gradient and Gaussian noise are projected onto the
+    tangent space before the update. The result is retracted to the sphere,
+    preserving the representation norm up to floating-point error. This is a
+    projected ULA construction, not an exact geodesic sampler.
+    """
+
+    _validate_langevin(step_size, temperature, noise_scale)
+    _validate_radius(radius)
+    state = _project_to_sphere(x, radius)
+    unit_state = state / radius
+    gradient = _energy_gradient(model, state)
+    tangent_gradient = gradient - (gradient * unit_state).sum(dim=-1, keepdim=True) * unit_state
+    if noise is None:
+        noise = torch.randn_like(state)
+    if noise.shape != state.shape:
+        raise ValueError("noise must have the same shape as x")
+    tangent_noise = noise - (noise * unit_state).sum(dim=-1, keepdim=True) * unit_state
+    updated = state - (step_size / (2.0 * temperature)) * tangent_gradient
+    updated = updated + noise_scale * step_size**0.5 * tangent_noise
+    return _project_to_sphere(updated, radius)
+
+
+def spherical_langevin_step(
+    model: nn.Module,
+    x: Tensor,
+    *,
+    step_size: float,
+    temperature: float = 1.0,
+    noise: Tensor | None = None,
+    noise_scale: float = 1.0,
+    radius: float = 1.0,
+) -> Tensor:
+    """Alias for explicit_spherical_langevin_step."""
+
+    return explicit_spherical_langevin_step(
+        model,
+        x,
+        step_size=step_size,
+        temperature=temperature,
+        noise=noise,
+        noise_scale=noise_scale,
+        radius=radius,
+    )
+
+
+def spherical_langevin_chain(
+    model: nn.Module,
+    x_init: Tensor,
+    *,
+    steps: int,
+    step_size: float,
+    temperature: float = 1.0,
+    noise_scale: float = 1.0,
+    radius: float = 1.0,
+    noise_sequence: Tensor | None = None,
+    callback: Callable[[int, Tensor], None] | None = None,
+) -> Tensor:
+    """Run projected Langevin dynamics with a spherical state constraint."""
+
+    if steps < 0:
+        raise ValueError("steps must be non-negative")
+    _validate_langevin(step_size, temperature, noise_scale)
+    _validate_radius(radius)
+    if noise_sequence is not None and noise_sequence.shape != (steps, *x_init.shape):
+        raise ValueError("noise_sequence must have shape (steps, *x_init.shape)")
+    state = _project_to_sphere(x_init, radius)
+    for index in range(steps):
+        state = explicit_spherical_langevin_step(
+            model,
+            state,
+            step_size=step_size,
+            temperature=temperature,
+            noise=noise_sequence[index] if noise_sequence is not None else None,
+            noise_scale=noise_scale,
+            radius=radius,
+        )
+        if callback is not None:
+            callback(index, state)
+    return state.detach()

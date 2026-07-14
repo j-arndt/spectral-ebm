@@ -18,7 +18,7 @@ FFT-parameterized circulant layers, explicit Langevin dynamics, reference-matrix
 
 ## The idea
 
-A dense hidden layer stores a full `D × D` matrix. A circulant layer stores one generator vector `c ∈ R^D`, applies the corresponding circular convolution with FFTs, and exposes an exact matrix convention that can be checked against a materialized reference.
+A dense hidden layer stores a full `D  D` matrix. A circulant layer stores one generator vector `c  R^D`, applies the corresponding circular convolution with FFTs, and exposes an exact matrix convention that can be checked against a materialized reference.
 
 This repository packages that structure into scalar energy models and tests the entire path: layer algebra, parameter counts, input gradients, Langevin updates, persistent chains, serialization, and small distribution-learning experiments.
 
@@ -28,10 +28,10 @@ This repository packages that structure into scalar energy models and tests the 
 
 | Dimension | Dense parameters | Spectral parameters | Reduction |
 |---:|---:|---:|---:|
-| 128 | 49,664 | 896 | 55.4× |
-| 512 | 788,480 | 3,584 | 219.8× |
-| 1,024 | 3,149,824 | 7,168 | 439.6× |
-| 2,048 | 12,591,104 | 14,336 | **878.8×** |
+| 128 | 49,664 | 896 | 55.4 |
+| 512 | 788,480 | 3,584 | 219.8 |
+| 1,024 | 3,149,824 | 7,168 | 439.6 |
+| 2,048 | 12,591,104 | 14,336 | **878.8** |
 
 At `D = 2,048`, the spectral model uses nearly three orders of magnitude fewer trainable parameters. The trade-off is structural restriction and, in the current CUDA snapshot, a slower end-to-end ULA step: `1.363 ms` spectral versus `0.729 ms` dense on an RTX 4060 Laptop GPU. The benchmark makes that trade-off visible instead of hiding it behind asymptotic notation.
 
@@ -66,8 +66,8 @@ The extension benchmark is intentionally modest and descriptive:
 
 | D | Dense channel-map parameters | Block-circulant parameters | Reduction |
 |---:|---:|---:|---:|
-| 32 | 16,512 | 640 | 25.8× |
-| 64 | 65,792 | 1,280 | **51.4×** |
+| 32 | 16,512 | 640 | 25.8 |
+| 64 | 65,792 | 1,280 | **51.4** |
 
 <img src="docs/assets/extensions.png" alt="Block-circulant parameter budget and persistent Langevin CPU smoke benchmark" width="900">
 
@@ -122,11 +122,11 @@ W[i, j] = c[(i - j) mod D]
 W x     = irfft(rfft(x) * rfft(c), n=D)
 ```
 
-The first column of `W` is `c`. The spectral norm is computed exactly from the maximum magnitude of the discrete Fourier spectrum of `c`. For energy `Eθ(x)` at temperature `T`, the implemented ULA update is:
+The first column of `W` is `c`. The spectral norm is computed exactly from the maximum magnitude of the discrete Fourier spectrum of `c`. For energy `E(x)` at temperature `T`, the implemented ULA update is:
 
 ```text
-x_next = x - h/(2T) ∇x Eθ(x) + √h ε
-ε ~ Normal(0, I)
+x_next = x - h/(2T) * grad E(x) + sqrt(h) * epsilon
+ ~ Normal(0, I)
 ```
 
 The reference construction, normalization details, invariants, and limitations are written out in [docs/proof.md](docs/proof.md). Projected bounds are exposed as an explicit approximation; they are not presented as exact unconstrained sampling.
@@ -155,7 +155,7 @@ The committed artifacts include CPU and CUDA timings, large-dimension measuremen
 
 ### Optional Triton backend
 
-`BlockCirculantLinear(..., backend="triton")` fuses the complex frequency-bin channel contraction in Triton while leaving the explicit `torch.fft.rfft`/`irfft` transforms on cuFFT. This removes the intermediate broadcast/einsum tensor; it does **not** claim that cuFFT’s internal FFT stages are fused or that every GPU receives a 2× speedup.
+`BlockCirculantLinear(..., backend="triton")` fuses the complex frequency-bin channel contraction in Triton while leaving the explicit `torch.fft.rfft`/`irfft` transforms on cuFFT. This removes the intermediate broadcast/einsum tensor; it does **not** claim that cuFFT's internal FFT stages are fused or that every GPU receives a 2x speedup.
 
 ```powershell
 python -m pip install -e .[triton]
@@ -163,7 +163,7 @@ python -m pip install -e .[triton]
 
 Use `backend="torch"` for the portable default. Triton requires CUDA, a compatible Triton build, and a working C/CUDA compiler toolchain; the test suite skips the accelerator test when those prerequisites are absent.
 
-The committed [`2026-07-14-triton.json`](benchmark_results/2026-07-14-triton.json) records this machine capability probe and intentionally contains no fabricated speedup number.
+The capability probe records unavailable environments, while the measured RTX 4060 Laptop GPU artifact records an actual comparison. These artifacts do not claim a universal speedup.
 
 ### Differentiable permutations
 
@@ -204,6 +204,20 @@ Run the end-to-end smoke adapter with:
 ```powershell
 python scripts/formal_search_demo.py --dim 64 --steps 4
 ```
+### Production hardening
+
+The v0.4.0 hardening surface adds three opt-in production controls:
+
+- AmortizedHouseholderPermutation composes K trainable Householder reflections with K*D parameters and preserves the Euclidean norm up to floating-point error. It is an orthogonal mixer, not a strict one-hot permutation matrix.
+- FormalProofSearchAdapter now defaults to tangent-projected spherical Langevin refinement, keeping HRR states on a chosen radius. Set spherical=False to use the existing Euclidean persistent ULA path.
+- The tiled Triton frequency mixer aggregates row, output-channel, and frequency tiles and processes input channels in bounded chunks. Explicit FFT transforms remain cuFFT operations.
+
+Run the scale and stability audit with:
+
+    python -m benchmarks.hardening_audit --device cuda --dim 4096 --batch-size 64 --channels 8 --output benchmark_results/hardening-cuda.json
+
+The audit reports Sinkhorn versus Householder parameter memory, CUDA peak allocation when available, and per-step sphere-norm envelopes. The committed CPU smoke artifact uses a smaller dimension so it remains reproducible on ordinary development machines.
+
 ## Repository map
 
 ```text
@@ -221,7 +235,7 @@ Circulant and FFT-structured projections are established prior art, as are EBMs 
 
 ## Releases, license, and citation
 
-The current public release is [v0.3.0](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.3.0). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
+The current public release is [v0.4.0](https://github.com/j-arndt/spectral-ebm/releases/tag/v0.4.0). Source code is licensed under the [Apache License 2.0](LICENSE). Citation metadata is provided in [CITATION.cff](CITATION.cff).
 
 ```bibtex
 @software{arndt_spectral_ebm_2026,
@@ -235,4 +249,4 @@ The current public release is [v0.3.0](https://github.com/j-arndt/spectral-ebm/r
 
 ## Status
 
-`v0.3.0` is a polished enterprise-integration proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.
+`v0.4.0` is a polished enterprise-integration proof-of-concept release: the local test suite passes, the GitHub Actions matrix passes on Python 3.10 and 3.12, and the public repository contains the raw evidence needed to reproduce the claims.

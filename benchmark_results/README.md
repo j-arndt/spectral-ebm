@@ -15,6 +15,8 @@ These JSON files are the source of truth for the figures and tables in the repos
 | [`2026-07-14-ring-score.json`](2026-07-14-ring-score.json) | Noisy-ring score matching and sampled-radius summary |
 | [`2026-07-14-extensions-cpu.json`](2026-07-14-extensions-cpu.json) | Block-circulant versus dense channel-map timing and persistent-chain smoke measurements |
 | [`2026-07-14-triton.json`](2026-07-14-triton.json) | Triton capability probe; records unavailable status when toolchain prerequisites are missing |
+| 2026-07-14-triton-cuda.json | RTX 4060 Laptop GPU tiled Triton versus torch frequency-mix timing |
+| 2026-07-14-hardening-cpu.json | v0.4.0 Householder memory and spherical-stability CPU audit |
 
 The published plots are generated with [`scripts/make_plots.py`](../scripts/make_plots.py):
 

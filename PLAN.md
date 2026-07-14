@@ -1,16 +1,16 @@
 # Spectral EBM: Correctness-First Proof-of-Concept Plan
 
-Status: v0.3.0 is public; main and the release tag are published, and remote verification is green.
+Status: v0.4.0 hardening implementation is verified locally; publication and remote verification remain pending.
 
 ## Release audit (2026-07-14)
 
 - Public repository: https://github.com/j-arndt/spectral-ebm
-- Current main commit at release: `3e192f1`
-- Current public release: `v0.3.0` with a GitHub Release and Apache-2.0 license
-- Local verification: 29 tests passed, 1 optional Triton test skipped by prerequisite gate, Ruff passed, and a 0.3.0 wheel was built successfully
+- Current main commit: pending v0.4.0 publication
+- Current release target: `v0.4.0` with a GitHub Release and Apache-2.0 license
+- Local verification: 34 tests passed, 1 optional Triton test skipped by default gate, actual Triton correctness passed with the configured compiler, Ruff passed, and a 0.4.0 wheel was built successfully
 - Extension verification: block-circulant reference/norm checks, permutation serialization checks, fixed-noise chain equivalence, and a 10-repeat CPU artifact
 - Remote verification: GitHub Actions passed on Python 3.10 and 3.12
-- Public presentation: README hero plots, extension plots, result tables, raw JSON artifacts, About description, homepage, and discovery topics
+- Hardening evidence: tiled Triton timing, Householder memory/stability audit, spherical norm tests, README, proof notes, and raw JSON artifacts
 
 ## Final goal
 

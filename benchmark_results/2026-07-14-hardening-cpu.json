@@ -1,0 +1,47 @@
+{
+  "status": "completed",
+  "config": {
+    "dim": 64,
+    "batch_size": 4,
+    "channels": 2,
+    "reflections": 4,
+    "steps": 3,
+    "step_size": 0.01,
+    "device": "cpu",
+    "output": "benchmark_results\\2026-07-14-hardening-cpu.json"
+  },
+  "environment": {
+    "python": "3.12.0",
+    "torch": "2.6.0+cu124",
+    "device_name": "CPU"
+  },
+  "memory_profile": {
+    "sinkhorn_parameter_mb": 0.015625,
+    "householder_parameter_mb": 0.0009765625,
+    "reduction_factor": 16.0,
+    "cuda_peak_allocated_mb": null
+  },
+  "spherical_stability": {
+    "norm_history": [
+      {
+        "step": 0,
+        "min_norm": 0.9999999403953552,
+        "max_norm": 1.0,
+        "mean_norm": 1.0
+      },
+      {
+        "step": 1,
+        "min_norm": 0.9999998807907104,
+        "max_norm": 1.0000001192092896,
+        "mean_norm": 1.0
+      },
+      {
+        "step": 2,
+        "min_norm": 1.0,
+        "max_norm": 1.0,
+        "mean_norm": 1.0
+      }
+    ],
+    "max_abs_norm_error": 1.1920928955078125e-07
+  }
+}

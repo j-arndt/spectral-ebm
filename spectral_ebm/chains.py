@@ -1,20 +1,17 @@
-"""Optional persistent chains for short-run contrastive-divergence experiments."""
+"""Optional persistent Euclidean and spherical chains."""
 
 from __future__ import annotations
+
+from typing import Literal
 
 import torch
 from torch import Tensor, nn
 
-from .sampler import vectorized_langevin_chain
+from .sampler import spherical_langevin_chain, vectorized_langevin_chain
 
 
 class PersistentLangevin:
-    """Keep a detached ULA state between optimization steps.
-
-    This is a practical CD device, not a guarantee that the state is at
-    equilibrium. ``reset`` should be called when the target domain or model
-    semantics change.
-    """
+    """Keep a detached ULA or spherical state between optimization steps."""
 
     def __init__(self, *, bounds: tuple[float, float] | None = None) -> None:
         self.state: Tensor | None = None
@@ -31,18 +28,35 @@ class PersistentLangevin:
         step_size: float,
         temperature: float,
         noise_scale: float = 1.0,
+        sampler: Literal["ula", "spherical"] = "ula",
+        radius: float = 1.0,
     ) -> Tensor:
         if self.state is None:
             raise RuntimeError("persistent state is not initialized")
-        self.state = vectorized_langevin_chain(
-            model,
-            self.state,
-            steps=steps,
-            step_size=step_size,
-            temperature=temperature,
-            bounds=self.bounds,
-            noise_scale=noise_scale,
-        )
+        if sampler == "spherical":
+            if self.bounds is not None:
+                raise ValueError("spherical sampling cannot be combined with box bounds")
+            self.state = spherical_langevin_chain(
+                model,
+                self.state,
+                steps=steps,
+                step_size=step_size,
+                temperature=temperature,
+                noise_scale=noise_scale,
+                radius=radius,
+            )
+        elif sampler == "ula":
+            self.state = vectorized_langevin_chain(
+                model,
+                self.state,
+                steps=steps,
+                step_size=step_size,
+                temperature=temperature,
+                bounds=self.bounds,
+                noise_scale=noise_scale,
+            )
+        else:
+            raise ValueError("sampler must be ula or spherical")
         return self.state
 
     def sample(
@@ -55,8 +69,10 @@ class PersistentLangevin:
         temperature: float = 1.0,
         device: torch.device | str | None = None,
         dtype: torch.dtype | None = None,
+        sampler: Literal["ula", "spherical"] = "ula",
+        radius: float = 1.0,
     ) -> Tensor:
-        """Initialize or reuse a random state, then run optimized ULA."""
+        """Initialize or reuse a random state, then run the selected chain."""
 
         parameter = next(model.parameters(), None)
         if parameter is not None:
@@ -74,6 +90,8 @@ class PersistentLangevin:
             steps=steps,
             step_size=step_size,
             temperature=temperature,
+            sampler=sampler,
+            radius=radius,
         )
 
     def sample_from(
@@ -86,8 +104,10 @@ class PersistentLangevin:
         temperature: float = 1.0,
         bounds: tuple[float, float] | None = None,
         noise_scale: float = 1.0,
+        sampler: Literal["ula", "spherical"] = "ula",
+        radius: float = 1.0,
     ) -> Tensor:
-        """Start a persistent optimized chain from an explicit continuous state."""
+        """Start a persistent chain from an explicit continuous state."""
 
         if bounds is not None:
             self.bounds = bounds
@@ -98,4 +118,6 @@ class PersistentLangevin:
             step_size=step_size,
             temperature=temperature,
             noise_scale=noise_scale,
+            sampler=sampler,
+            radius=radius,
         )

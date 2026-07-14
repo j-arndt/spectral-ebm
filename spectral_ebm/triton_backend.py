@@ -1,8 +1,9 @@
-"""Optional Triton acceleration for block-circulant frequency mixing.
+"""Optional tiled Triton acceleration for block-circulant frequency mixing.
 
 The FFT transforms remain explicit torch.fft operations backed by cuFFT. The
-Triton kernel fuses the complex frequency-bin channel contraction so the
-intermediate unsqueeze/einsum tensor is never materialized in global memory.
+Triton kernel tiles rows, output channels, and frequency bins while processing
+input channels in bounded chunks. It fuses the complex frequency contraction;
+it does not replace cuFFT internal FFT stages.
 """
 
 from __future__ import annotations
@@ -13,17 +14,17 @@ import shutil
 import torch
 from torch import Tensor
 
-try:  # Triton is an optional accelerator dependency.
+try:
     import triton
     import triton.language as tl
 
     _TRITON_IMPORTED = True
-except (ImportError, RuntimeError):  # pragma: no cover - depends on environment.
+except (ImportError, RuntimeError):
     _TRITON_IMPORTED = False
 
 
 def triton_available() -> bool:
-    """Return whether the optional Triton backend can be requested."""
+    """Return whether Triton is importable and CUDA is available."""
 
     return _TRITON_IMPORTED and torch.cuda.is_available()
 
@@ -33,7 +34,12 @@ def triton_runtime_available() -> bool:
 
     if not triton_available():
         return False
-    compiler = os.environ.get("CC") or shutil.which("cl") or shutil.which("gcc") or shutil.which("clang")
+    compiler = (
+        os.environ.get("CC")
+        or shutil.which("cl")
+        or shutil.which("gcc")
+        or shutil.which("clang")
+    )
     if compiler is None:
         return False
     try:
@@ -53,7 +59,7 @@ def _next_power_of_two(value: int) -> int:
 if _TRITON_IMPORTED:
 
     @triton.jit
-    def _frequency_mix_kernel(
+    def _fused_warp_parallel_mix_kernel(
         x_ptr,
         weight_ptr,
         output_ptr,
@@ -61,36 +67,102 @@ if _TRITON_IMPORTED:
         in_channels,
         out_channels,
         frequencies,
-        BLOCK_IN: tl.constexpr,
+        BLOCK_R: tl.constexpr,
+        BLOCK_O: tl.constexpr,
+        BLOCK_F: tl.constexpr,
+        BLOCK_I: tl.constexpr,
     ):
-        program = tl.program_id(0)
-        total = rows * out_channels * frequencies
-        if program >= total:
-            return
-        frequency = program % frequencies
-        quotient = program // frequencies
-        out_channel = quotient % out_channels
-        row = quotient // out_channels
-        input_channels = tl.arange(0, BLOCK_IN)
-        mask = input_channels < in_channels
-        x_offset = ((row * in_channels + input_channels) * frequencies + frequency) * 2
-        weight_offset = (
-            (out_channel * in_channels + input_channels) * frequencies + frequency
+        pid_r = tl.program_id(0)
+        pid_o = tl.program_id(1)
+        pid_f = tl.program_id(2)
+        offsets_r = pid_r * BLOCK_R + tl.arange(0, BLOCK_R)
+        offsets_o = pid_o * BLOCK_O + tl.arange(0, BLOCK_O)
+        offsets_f = pid_f * BLOCK_F + tl.arange(0, BLOCK_F)
+        mask_r = offsets_r < rows
+        mask_o = offsets_o < out_channels
+        mask_f = offsets_f < frequencies
+        acc_real = tl.zeros((BLOCK_R, BLOCK_O, BLOCK_F), dtype=tl.float32)
+        acc_imag = tl.zeros((BLOCK_R, BLOCK_O, BLOCK_F), dtype=tl.float32)
+
+        for input_start in range(0, in_channels, BLOCK_I):
+            offsets_i = input_start + tl.arange(0, BLOCK_I)
+            mask_i = offsets_i < in_channels
+            x_offsets = (
+                (
+                    offsets_r[:, None, None] * in_channels
+                    + offsets_i[None, :, None]
+                )
+                * frequencies
+                + offsets_f[None, None, :]
+            ) * 2
+            x_mask = (
+                mask_r[:, None, None]
+                & mask_i[None, :, None]
+                & mask_f[None, None, :]
+            )
+            x_real = tl.load(x_ptr + x_offsets, mask=x_mask, other=0.0).to(tl.float32)
+            x_imag = tl.load(x_ptr + x_offsets + 1, mask=x_mask, other=0.0).to(tl.float32)
+
+            weight_offsets = (
+                (
+                    offsets_o[:, None, None] * in_channels
+                    + offsets_i[None, :, None]
+                )
+                * frequencies
+                + offsets_f[None, None, :]
+            ) * 2
+            weight_mask = (
+                mask_o[:, None, None]
+                & mask_i[None, :, None]
+                & mask_f[None, None, :]
+            )
+            weight_real = tl.load(
+                weight_ptr + weight_offsets, mask=weight_mask, other=0.0
+            ).to(tl.float32)
+            weight_imag = tl.load(
+                weight_ptr + weight_offsets + 1, mask=weight_mask, other=0.0
+            ).to(tl.float32)
+
+            product_real = (
+                x_real[:, None, :, :] * weight_real[None, :, :, :]
+                - x_imag[:, None, :, :] * weight_imag[None, :, :, :]
+            )
+            product_imag = (
+                x_real[:, None, :, :] * weight_imag[None, :, :, :]
+                + x_imag[:, None, :, :] * weight_real[None, :, :, :]
+            )
+            acc_real += tl.sum(product_real, axis=2)
+            acc_imag += tl.sum(product_imag, axis=2)
+
+        output_offsets = (
+            (
+                offsets_r[:, None, None] * out_channels
+                + offsets_o[None, :, None]
+            )
+            * frequencies
+            + offsets_f[None, None, :]
         ) * 2
-        x_real = tl.load(x_ptr + x_offset, mask=mask, other=0.0).to(tl.float32)
-        x_imag = tl.load(x_ptr + x_offset + 1, mask=mask, other=0.0).to(tl.float32)
-        weight_real = tl.load(weight_ptr + weight_offset, mask=mask, other=0.0).to(tl.float32)
-        weight_imag = tl.load(weight_ptr + weight_offset + 1, mask=mask, other=0.0).to(tl.float32)
-        output_real = tl.sum(x_real * weight_real - x_imag * weight_imag, axis=0)
-        output_imag = tl.sum(x_real * weight_imag + x_imag * weight_real, axis=0)
-        output_offset = ((row * out_channels + out_channel) * frequencies + frequency) * 2
-        tl.store(output_ptr + output_offset, output_real)
-        tl.store(output_ptr + output_offset + 1, output_imag)
+        output_mask = mask_r[:, None, None] & mask_o[None, :, None] & mask_f[None, None, :]
+        tl.store(output_ptr + output_offsets, acc_real, mask=output_mask)
+        tl.store(output_ptr + output_offsets + 1, acc_imag, mask=output_mask)
+
+
+def _tile_config(
+    in_channels: int, out_channels: int, frequencies: int
+) -> tuple[int, int, int, int]:
+    block_r = 1
+    block_o = 8 if out_channels >= 8 else _next_power_of_two(out_channels)
+    block_f = 32 if frequencies >= 32 else _next_power_of_two(frequencies)
+    block_i = 32 if in_channels >= 32 else _next_power_of_two(in_channels)
+    return block_r, block_o, block_f, block_i
 
 
 def _forward(x_fft: Tensor, weight_fft: Tensor) -> Tensor:
     if not triton_runtime_available():
-        raise RuntimeError("Triton requires CUDA, Triton, and a working C compiler/runtime; use backend=\"torch\" otherwise")
+        raise RuntimeError(
+            "Triton requires CUDA, Triton, and a working C compiler/runtime; "
+            'use backend="torch" otherwise'
+        )
     if not x_fft.is_cuda or not weight_fft.is_cuda or x_fft.device != weight_fft.device:
         raise ValueError("Triton inputs must be CUDA tensors on the same device")
     if x_fft.dtype != torch.complex64 or weight_fft.dtype != torch.complex64:
@@ -110,9 +182,15 @@ def _forward(x_fft: Tensor, weight_fft: Tensor) -> Tensor:
         device=x_fft.device,
         dtype=torch.float32,
     )
-    block_in = _next_power_of_two(in_channels)
-    grid = (rows * out_channels * frequencies,)
-    _frequency_mix_kernel[grid](
+    block_r, block_o, block_f, block_i = _tile_config(
+        in_channels, out_channels, frequencies
+    )
+    grid = (
+        (rows + block_r - 1) // block_r,
+        (out_channels + block_o - 1) // block_o,
+        (frequencies + block_f - 1) // block_f,
+    )
+    _fused_warp_parallel_mix_kernel[grid](
         torch.view_as_real(x_flat),
         torch.view_as_real(weight_flat),
         output_real,
@@ -120,13 +198,16 @@ def _forward(x_fft: Tensor, weight_fft: Tensor) -> Tensor:
         in_channels,
         out_channels,
         frequencies,
-        BLOCK_IN=block_in,
+        BLOCK_R=block_r,
+        BLOCK_O=block_o,
+        BLOCK_F=block_f,
+        BLOCK_I=block_i,
     )
     return torch.view_as_complex(output_real).reshape(*x_fft.shape[:-2], out_channels, frequencies)
 
 
 class _TritonFrequencyMix(torch.autograd.Function):
-    """Autograd wrapper: Triton forward, exact torch complex backward."""
+    """Autograd wrapper: tiled Triton forward, exact torch complex backward."""
 
     @staticmethod
     def forward(ctx, x_fft: Tensor, weight_fft: Tensor) -> Tensor:
