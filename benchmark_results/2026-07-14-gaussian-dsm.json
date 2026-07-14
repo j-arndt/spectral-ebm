@@ -1,0 +1,27 @@
+{
+  "environment": {
+    "python": "3.12.0",
+    "torch": "2.6.0+cu124"
+  },
+  "config": {
+    "dim": 2,
+    "steps": 300,
+    "batch_size": 256,
+    "noise_std": 0.2,
+    "lr": 0.002,
+    "seed": 0,
+    "output": "benchmark_results\\2026-07-14-gaussian-dsm.json"
+  },
+  "spectral": {
+    "parameters": 14,
+    "loss_initial": 25.382591247558594,
+    "loss_final": 24.629348754882812,
+    "score_mse_standard_normal": 0.5530828237533569
+  },
+  "dense": {
+    "parameters": 20,
+    "loss_initial": 25.31454086303711,
+    "loss_final": 23.354543685913086,
+    "score_mse_standard_normal": 0.6029869914054871
+  }
+}
